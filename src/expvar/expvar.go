@@ -113,13 +113,11 @@ func (v *Map) String() string {
 	var b strings.Builder
 	b.WriteByte('{')
 	first := true
-	keyBuf := make([]byte, 0, 64)
 	v.Do(func(kv KeyValue) {
 		if !first {
 			b.WriteString(", ")
 		}
-		keyBuf = strconv.AppendQuote(keyBuf[:0], kv.Key)
-		b.Write(keyBuf)
+		b.WriteString(strconv.Quote(kv.Key))
 		b.WriteString(": ")
 		b.WriteString(kv.Value.String())
 		first = false
