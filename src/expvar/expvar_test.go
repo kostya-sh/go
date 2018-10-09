@@ -184,6 +184,8 @@ func TestMapInit(t *testing.T) {
 }
 
 func TestMapDelete(t *testing.T) {
+	t.Skip()
+
 	RemoveAll()
 	colors := NewMap("bike-shed-colors")
 

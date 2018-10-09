@@ -23,7 +23,6 @@ package expvar
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -97,17 +96,43 @@ func (v *Float) Set(value float64) {
 	atomic.StoreUint64(&v.f, math.Float64bits(value))
 }
 
+type keys struct {
+	sync.RWMutex
+	keys       []string // sorted
+	quotedKeys []string
+}
+
+func (v *keys) Len() int           { return len(v.keys) }
+func (v *keys) Less(i, j int) bool { return v.keys[i] < v.keys[j] }
+func (v *keys) Swap(i, j int)      { v.keys[i], v.quotedKeys[i] = v.keys[j], v.quotedKeys[j] }
+
+func (k *keys) clear() {
+	k.Lock()
+	k.keys = k.keys[:0]
+	k.quotedKeys = k.quotedKeys[:0]
+	k.Unlock()
+}
+
+func (v *keys) add(key string) {
+	v.Lock()
+	v.keys = append(v.keys, key)
+	v.quotedKeys = append(v.quotedKeys, strconv.Quote(key))
+	sort.Sort(v)
+	v.Unlock()
+}
+
 // Map is a string-to-Var map variable that satisfies the Var interface.
 type Map struct {
-	m      sync.Map // map[string]Var
-	keysMu sync.RWMutex
-	keys   []string // sorted
+	m    sync.Map // map[string]Var
+	keys keys
 }
 
 // KeyValue represents a single entry in a Map.
 type KeyValue struct {
 	Key   string
 	Value Var
+
+	quotedKey string
 }
 
 func (v *Map) String() string {
@@ -118,7 +143,7 @@ func (v *Map) String() string {
 		if !first {
 			b.WriteString(", ")
 		}
-		fmt.Fprintf(&b, "%q", kv.Key)
+		b.WriteString(kv.quotedKey)
 		b.WriteString(": ")
 		b.WriteString(kv.Value.String())
 		first = false
@@ -129,9 +154,7 @@ func (v *Map) String() string {
 
 // Init removes all keys from the map.
 func (v *Map) Init() *Map {
-	v.keysMu.Lock()
-	defer v.keysMu.Unlock()
-	v.keys = v.keys[:0]
+	v.keys.clear()
 	v.m.Range(func(k, _ interface{}) bool {
 		v.m.Delete(k)
 		return true
@@ -141,10 +164,7 @@ func (v *Map) Init() *Map {
 
 // addKey updates the sorted list of keys in v.keys.
 func (v *Map) addKey(key string) {
-	v.keysMu.Lock()
-	defer v.keysMu.Unlock()
-	v.keys = append(v.keys, key)
-	sort.Strings(v.keys)
+	v.keys.add(key)
 }
 
 func (v *Map) Get(key string) Var {
@@ -203,11 +223,12 @@ func (v *Map) AddFloat(key string, delta float64) {
 
 // Deletes the given key from the map.
 func (v *Map) Delete(key string) {
-	v.keysMu.Lock()
-	defer v.keysMu.Unlock()
-	i := sort.SearchStrings(v.keys, key)
-	if i < len(v.keys) && key == v.keys[i] {
-		v.keys = append(v.keys[:i], v.keys[i+1:]...)
+	v.keys.Lock()
+	defer v.keys.Unlock()
+	i := sort.SearchStrings(v.keys.keys, key)
+	if i < len(v.keys.keys) && key == v.keys.keys[i] {
+		v.keys.keys = append(v.keys.keys[:i], v.keys.keys[i+1:]...)
+		v.keys.quotedKeys = append(v.keys.quotedKeys[:i], v.keys.quotedKeys[i+1:]...)
 		v.m.Delete(key)
 	}
 }
@@ -216,11 +237,11 @@ func (v *Map) Delete(key string) {
 // The map is locked during the iteration,
 // but existing entries may be concurrently updated.
 func (v *Map) Do(f func(KeyValue)) {
-	v.keysMu.RLock()
-	defer v.keysMu.RUnlock()
-	for _, k := range v.keys {
+	v.keys.RLock()
+	defer v.keys.RUnlock()
+	for j, k := range v.keys.keys {
 		i, _ := v.m.Load(k)
-		f(KeyValue{k, i.(Var)})
+		f(KeyValue{k, i.(Var), v.keys.quotedKeys[j]})
 	}
 }
 
@@ -321,7 +342,7 @@ func Do(f func(KeyValue)) {
 	defer varKeysMu.RUnlock()
 	for _, k := range varKeys {
 		val, _ := vars.Load(k)
-		f(KeyValue{k, val.(Var)})
+		f(KeyValue{k, val.(Var), ""})
 	}
 }
 
