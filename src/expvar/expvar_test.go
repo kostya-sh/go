@@ -21,12 +21,12 @@ import (
 // RemoveAll removes all exported variables.
 // This is for tests only.
 func RemoveAll() {
-	varKeysMu.Lock()
-	defer varKeysMu.Unlock()
-	for _, k := range varKeys {
+	varKeys.Lock()
+	for _, k := range varKeys.keys {
 		vars.Delete(k)
 	}
-	varKeys = nil
+	varKeys.Unlock()
+	varKeys.clear()
 }
 
 func TestNil(t *testing.T) {
@@ -184,8 +184,6 @@ func TestMapInit(t *testing.T) {
 }
 
 func TestMapDelete(t *testing.T) {
-	t.Skip()
-
 	RemoveAll()
 	colors := NewMap("bike-shed-colors")
 

@@ -23,6 +23,7 @@ package expvar
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -99,26 +100,36 @@ func (v *Float) Set(value float64) {
 type keys struct {
 	sync.RWMutex
 	keys       []string // sorted
-	quotedKeys []string
+	quotedKeys map[string]string
 }
-
-func (v *keys) Len() int           { return len(v.keys) }
-func (v *keys) Less(i, j int) bool { return v.keys[i] < v.keys[j] }
-func (v *keys) Swap(i, j int)      { v.keys[i], v.quotedKeys[i] = v.keys[j], v.quotedKeys[j] }
 
 func (k *keys) clear() {
 	k.Lock()
 	k.keys = k.keys[:0]
-	k.quotedKeys = k.quotedKeys[:0]
+	for z, _ := range k.quotedKeys {
+		delete(k.quotedKeys, z)
+	}
 	k.Unlock()
 }
 
 func (v *keys) add(key string) {
 	v.Lock()
 	v.keys = append(v.keys, key)
-	v.quotedKeys = append(v.quotedKeys, strconv.Quote(key))
-	sort.Sort(v)
+	if v.quotedKeys == nil {
+		v.quotedKeys = make(map[string]string)
+	}
+	v.quotedKeys[key] = strconv.Quote(key)
+	sort.Strings(v.keys)
 	v.Unlock()
+}
+
+func (v *keys) Do(vars *sync.Map, f func(KeyValue)) {
+	v.RLock()
+	defer v.RUnlock()
+	for _, k := range v.keys {
+		val, _ := vars.Load(k)
+		f(KeyValue{k, val.(Var)})
+	}
 }
 
 // Map is a string-to-Var map variable that satisfies the Var interface.
@@ -131,8 +142,6 @@ type Map struct {
 type KeyValue struct {
 	Key   string
 	Value Var
-
-	quotedKey string
 }
 
 func (v *Map) String() string {
@@ -143,7 +152,7 @@ func (v *Map) String() string {
 		if !first {
 			b.WriteString(", ")
 		}
-		b.WriteString(kv.quotedKey)
+		b.WriteString(v.keys.quotedKeys[kv.Key])
 		b.WriteString(": ")
 		b.WriteString(kv.Value.String())
 		first = false
@@ -228,7 +237,7 @@ func (v *Map) Delete(key string) {
 	i := sort.SearchStrings(v.keys.keys, key)
 	if i < len(v.keys.keys) && key == v.keys.keys[i] {
 		v.keys.keys = append(v.keys.keys[:i], v.keys.keys[i+1:]...)
-		v.keys.quotedKeys = append(v.keys.quotedKeys[:i], v.keys.quotedKeys[i+1:]...)
+		delete(v.keys.quotedKeys, key)
 		v.m.Delete(key)
 	}
 }
@@ -237,12 +246,7 @@ func (v *Map) Delete(key string) {
 // The map is locked during the iteration,
 // but existing entries may be concurrently updated.
 func (v *Map) Do(f func(KeyValue)) {
-	v.keys.RLock()
-	defer v.keys.RUnlock()
-	for j, k := range v.keys.keys {
-		i, _ := v.m.Load(k)
-		f(KeyValue{k, i.(Var), v.keys.quotedKeys[j]})
-	}
+	v.keys.Do(&v.m, f)
 }
 
 // String is a string variable, and satisfies the Var interface.
@@ -282,9 +286,8 @@ func (f Func) String() string {
 
 // All published variables.
 var (
-	vars      sync.Map // map[string]Var
-	varKeysMu sync.RWMutex
-	varKeys   []string // sorted
+	vars    sync.Map // map[string]Var
+	varKeys keys
 )
 
 // Publish declares a named exported variable. This should be called from a
@@ -294,10 +297,7 @@ func Publish(name string, v Var) {
 	if _, dup := vars.LoadOrStore(name, v); dup {
 		log.Panicln("Reuse of exported var name:", name)
 	}
-	varKeysMu.Lock()
-	defer varKeysMu.Unlock()
-	varKeys = append(varKeys, name)
-	sort.Strings(varKeys)
+	varKeys.add(name)
 }
 
 // Get retrieves a named exported variable. It returns nil if the name has
@@ -338,30 +338,23 @@ func NewString(name string) *String {
 // The global variable map is locked during the iteration,
 // but existing entries may be concurrently updated.
 func Do(f func(KeyValue)) {
-	varKeysMu.RLock()
-	defer varKeysMu.RUnlock()
-	for _, k := range varKeys {
-		val, _ := vars.Load(k)
-		f(KeyValue{k, val.(Var), ""})
-	}
+	varKeys.Do(&vars, f)
 }
 
 func expvarHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte("{\n"))
+	io.WriteString(w, "{\n")
 	first := true
-	keyBuf := make([]byte, 0, 64)
 	Do(func(kv KeyValue) {
 		if !first {
-			w.Write([]byte(",\n"))
+			io.WriteString(w, ",\n")
 		}
 		first = false
-		keyBuf = strconv.AppendQuote(keyBuf[:0], kv.Key)
-		w.Write(keyBuf)
-		w.Write([]byte(": "))
-		w.Write([]byte(kv.Value.String()))
+		io.WriteString(w, varKeys.quotedKeys[kv.Key])
+		io.WriteString(w, ": ")
+		io.WriteString(w, kv.Value.String())
 	})
-	w.Write([]byte("\n}\n"))
+	io.WriteString(w, "\n}\n")
 }
 
 // Handler returns the expvar HTTP Handler.
