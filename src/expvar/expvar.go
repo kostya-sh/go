@@ -23,6 +23,7 @@ package expvar
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -117,7 +118,7 @@ func (v *Map) String() string {
 		if !first {
 			b.WriteString(", ")
 		}
-		b.WriteString(strconv.Quote(kv.Key))
+		fmt.Fprintf(&b, "%q", kv.Key)
 		b.WriteString(": ")
 		b.WriteString(kv.Value.String())
 		first = false
