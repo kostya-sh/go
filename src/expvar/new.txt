@@ -1,0 +1,14 @@
+goos: darwin
+goarch: amd64
+BenchmarkMapString-4   	 1000000	      1046 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1059 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1064 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1068 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1064 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1067 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1071 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1089 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1096 ns/op	     184 B/op	       5 allocs/op
+BenchmarkMapString-4   	 1000000	      1073 ns/op	     184 B/op	       5 allocs/op
+PASS
+ok  	_/Users/ksh/Downloads/go/src/expvar	10.835s

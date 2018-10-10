@@ -1,0 +1,14 @@
+goos: darwin
+goarch: amd64
+BenchmarkRealworldExpvarUsage-4   	   50000	     27239 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	  100000	     32919 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	   50000	     26687 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	   50000	     28661 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	  100000	     28696 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	  100000	     31784 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	  100000	     29632 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	   50000	     27307 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	   50000	     25984 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRealworldExpvarUsage-4   	   50000	     27494 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	_/Users/ksh/Downloads/go/src/expvar	34.444s
